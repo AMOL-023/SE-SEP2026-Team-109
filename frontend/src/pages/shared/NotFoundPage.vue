@@ -1,1 +1,0 @@
-<template><div class="notfound"><h1>Page not found</h1><p class="muted">The page you opened does not exist or is not available to your role.</p><router-link class="btn" to="/login">Go to start</router-link></div></template>
