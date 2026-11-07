@@ -37,7 +37,7 @@ import MatchingPanel from '../../components/MatchingPanel.vue'
 import { weeklyRequests } from '../../utils/insights'
 const route = useRoute(), tab = computed(() => route.query.tab || 'overview')
 const rlabel = { open: 'Open', review: 'Under review', resolved: 'Resolved' }
-const n = r => state.users.filter(u => u.role === r && live(u).length, rc = s => state.requests.filter(r => r.status === s).length
+const n = r => state.users.filter(u => u.role === r && live(u)).length, rc = s => state.requests.filter(r => r.status === s).length
 const rate = computed(() => { const a = rc('accepted'), t = a + rc('rejected'); return t ? Math.round(a / t * 100) + '%' : 'n/a' })
 const openReports = computed(() => state.reports.filter(r => r.status !== 'resolved').length)
 const tabs = computed(() => [['overview', 'Overview'], ['users', 'Users'], ['matching', 'Matching'], ['content', 'Content'], ['reports', 'Reports']])
