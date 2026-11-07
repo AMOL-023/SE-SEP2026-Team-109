@@ -16,7 +16,7 @@
     </div>
     <div class="grid two">
       <section class="card" aria-labelledby="av"><h2 id="av">Availability</h2>
-        <template v-if="matched"><p v-if="!open.length" class="muted">No open slots at the moment.</p><ul class="plain"><li v-for="a in open" :key="a.id">{{ fmtDT(a.start) }}</li></ul><router-link class="btn sm" to="/student/sessions">Book a session</router-link></template>
+        <template v-if="matched"><p v-if="!open.length" class="muted">No open slots at the moment.</p><ul class="plain"><li v-for="a in open" :key="a.id">{{ fmtDT(a.start) }}</li></ul><router-link class="btn sm" to="/student/sessions">Request a session</router-link></template>
         <p v-else class="muted">Availability is shown only to students with an active mentorship with this mentor.</p></section>
       <section class="card" aria-labelledby="pb"><h2 id="pb">Public feedback <span class="count">{{ pub.length }}</span></h2>
         <p v-if="!pub.length" class="muted">No public feedback yet. Students decide whether to share their final feedback.</p>

@@ -1,6 +1,6 @@
 // Aggregate-only figures shared by the coordinator and admin views. No names, emails or message content.
 import { state, openSlots, live, DAY } from '../composables/useStore'
-const match = (a, m) => [...m.expertise, m.industry].some(x => x.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(x.toLowerCase()))
+const match = (a, m) => [...m.expertise, m.industry, m.careerArea || ''].some(x => x.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(x.toLowerCase()))
 export const students = () => state.users.filter(u => u.role === 'student' && live(u))
 export const verifiedMentors = () => state.users.filter(u => u.role === 'mentor' && u.title && u.verified && live(u))
 export const reqCount = s => state.requests.filter(r => r.status === s).length

@@ -1,6 +1,6 @@
 import { reactive, watch } from 'vue'
 import { seed } from '../data/mock'
-const KEY = 'mentorconnect_demo_v3'
+const KEY = 'mentorconnect_demo_v4'
 function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.users && s.sessions) return s } catch (e) { /* ignore corrupt data */ } return seed() }
 export const state = reactive(load())
 watch(state, () => { try { localStorage.setItem(KEY, JSON.stringify(state)) } catch (e) { /* storage unavailable */ } }, { deep: true })
@@ -38,25 +38,28 @@ export function login(email, password) {
 export const logout = () => { state.sessionId = null }
 export function register({ name, email, password, role, extra = {} }) {
   if (state.users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) return 'An account with this email already exists.'
-  const base = { id: uid(role[0]), role, name: name.trim(), email: email.trim(), password }
-  state.users.push(role === 'student' ? { ...base, programme: '', interests: [], needs: '', skills: [], ...extra }
-    : { ...base, title: '', company: '', years: 0, industry: '', bio: '', expertise: [], support: [], capacity: 2, paused: false, verified: false, ...extra })
+  const un = (extra.username || '').trim().toLowerCase()
+  if (!usernameOk(un)) return 'Choose a username of 3 to 20 lowercase letters, numbers or underscores.'
+  if (usernameTaken(un)) return 'That username is already taken.'
+  const base = { id: uid(role[0]), role, name: name.trim(), email: email.trim(), password, username: un }
+  state.users.push(role === 'student' ? { ...base, programme: '', interests: [], needs: '', skills: [], ...extra, username: un }
+    : { ...base, title: '', company: '', years: 0, industry: '', bio: '', expertise: [], support: [], capacity: 2, paused: false, verified: false, ...extra, username: un })
   if (role === 'mentor') state.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, `New mentor ${name.trim()} is waiting for verification`, '/admin/dashboard?tab=users'))
   return null
 }
 
 /* ---------- requests ---------- */
 function move(r, to, actor, reason = '') { r.history.push({ from: r.status, to, actor, at: Date.now() }); r.status = to; if (reason) r.reason = reason }
-export function submitRequest(sid, mid, message, goalIds = []) {
+export function submitRequest(sid, mid, message) {
   const m = userById(mid), msg = message.trim()
   if (!m || m.role !== 'mentor' || !m.verified) return 'Mentor not found.'
   if (msg.length < 50 || msg.length > 1500) return 'Your message must be between 50 and 1500 characters.'
+  if (state.mentorships.some(m => m.active && m.studentId === sid)) return 'You already have a mentor. Only one active mentorship is allowed at a time.'
   if (pendingOf(sid).length >= MAX_PENDING) return `You already have ${MAX_PENDING} pending requests. Withdraw one or wait for a reply.`
   if (pendingOf(sid).some(r => r.mentorId === mid)) return 'You already have a pending request to this mentor.'
   if (openSlots(m) < 1) return m.paused ? 'This mentor has paused new requests.' : 'This mentor has no open slots.'
-  if (goalIds.some(id => !state.goals.some(g => g.id === id && g.studentId === sid))) return 'One of the attached goals was not found.'
   const now = Date.now()
-  const r = { id: uid('r'), studentId: sid, mentorId: mid, message: msg, status: 'pending', reason: '', goalIds, createdAt: now, expiresAt: now + EXPIRY_DAYS * DAY, history: [{ from: null, to: 'pending', actor: 'Student', at: now }] }
+  const r = { id: uid('r'), studentId: sid, mentorId: mid, message: msg, status: 'pending', reason: '', createdAt: now, expiresAt: now + EXPIRY_DAYS * DAY, history: [{ from: null, to: 'pending', actor: 'Student', at: now }] }
   state.requests.unshift(r); notify(mid, `New mentoring request from ${userById(sid).name}`, `/mentor/requests/${r.id}`); return null
 }
 export function withdraw(id, sid) {
@@ -77,7 +80,9 @@ export function decide(id, mid, to, reason = '') {
   if (to === 'accepted') {
     // Capacity is re-checked at accept time (409 conflict if the last place was just taken).
     if (activeMentees(mid).length >= userById(mid).capacity) return '409 Conflict: your capacity is full, so this request cannot be accepted. Raise your capacity first.'
+    if (state.mentorships.some(m => m.active && m.studentId === r.studentId)) return '409 Conflict: this student already has a mentor, so the request cannot be accepted.'
     startMentorship(r.studentId, mid, 'Mentor')
+    state.requests.filter(x => x.studentId === r.studentId && x.id !== r.id && x.status === 'pending').forEach(x => { move(x, 'withdrawn', 'System'); notify(x.mentorId, `${userById(r.studentId).name} is now matched with another mentor, so their request was closed`, '/mentor/requests') })
   }
   move(r, to, 'Mentor', reason); notify(r.studentId, `${userById(mid).name} ${to} your request`, '/student/requests'); return null
 }
@@ -85,7 +90,14 @@ export function decide(id, mid, to, reason = '') {
 export function runExpiry() {
   const now = Date.now()
   state.requests.forEach(r => { if (r.status === 'pending' && r.expiresAt < now) { move(r, 'expired', 'System'); notify(r.studentId, 'A mentoring request expired after 14 days', '/student/requests'); notify(r.mentorId, 'A pending request expired', '/mentor/requests') } })
+  runReminders()
   runPurge()
+}
+// Automatic reminder (replaces the coordinator's manual button): a request pending for more than 7 days nudges the mentor once.
+export function runReminders() {
+  const now = Date.now(); let n = 0
+  state.requests.forEach(r => { if (r.status === 'pending' && !r.remindedAt && now - r.createdAt > 7 * DAY) { r.remindedAt = now; n++; notify(r.mentorId, `A student request has been waiting ${Math.floor((now - r.createdAt) / DAY)} days. Please reply when you can.`, `/mentor/requests/${r.id}`) } })
+  if (n) log('System', `Sent ${n} automatic reminder(s) for stalled requests`)
 }
 // Mock account purge: anonymises accounts whose deletion was requested more than RETENTION_DAYS ago.
 export function runPurge(force = false) {
@@ -99,11 +111,13 @@ export function runPurge(force = false) {
 }
 
 /* ---------- goals ---------- */
-export const VIS = [['me', 'Only me'], ['all', 'All mentors (anonymous)'], ['mentor', 'Only my mentor']]
-export function addGoal(sid, title, target, description = '', visibility = 'me', tags = [], shareCoord = false) {
+export const VIS = [['me', 'Private (only me)'], ['all', 'All mentors (anonymous)'], ['mentor', 'Only my mentor']]
+// Coordinators can see every goal that is not private.
+export const coordinatorGoals = () => state.goals.filter(g => g.visibility !== 'me')
+export function addGoal(sid, title, target, description = '', visibility = 'me', tags = []) {
   if (title.trim().length < 3) return 'Give the goal a title of at least 3 characters.'
   if (!target || new Date(target) < new Date(new Date().toDateString())) return 'Choose a target date that is today or later.'
-  state.goals.push({ id: uid('g'), studentId: sid, title: title.trim(), description: description.trim(), target, status: 'todo', visibility, tags, shareCoord }); return null
+  state.goals.push({ id: uid('g'), studentId: sid, title: title.trim(), description: description.trim(), target, status: 'todo', visibility, tags }); return null
 }
 export const openGoals = () => state.goals.filter(g => g.visibility === 'all' && g.status !== 'done')
 
@@ -119,32 +133,54 @@ function slotCheck(mid, s, e, selfId) {
 export function addSlot(mid, start, end) { const s = toMs(start), e = toMs(end), er = slotCheck(mid, s, e); if (er) return er; state.availability.push({ id: uid('av'), mentorId: mid, start: s, end: e, status: 'open', sessionId: null }); return null }
 export function updateSlot(id, mid, start, end) {
   const a = state.availability.find(x => x.id === id && x.mentorId === mid); if (!a) return 'Slot not found.'
-  if (a.status === 'booked') return 'Booked slots cannot be changed. Cancel the session first.'
+  if (a.status !== 'open') return 'Slots with a pending request or a booking cannot be changed. Cancel or reschedule the session first.'
   const s = toMs(start), e = toMs(end), er = slotCheck(mid, s, e, id); if (er) return er; Object.assign(a, { start: s, end: e }); return null
 }
 export function removeSlot(id, mid) {
   const a = state.availability.find(x => x.id === id && x.mentorId === mid); if (!a) return 'Slot not found.'
-  if (a.status === 'booked') return 'Booked slots cannot be removed. Cancel the session first.'
+  if (a.status !== 'open') return 'Slots with a pending request or a booking cannot be removed. Cancel or reschedule the session first.'
   state.availability.splice(state.availability.indexOf(a), 1); return null
 }
-export function bookSlot(slotId, sid) {
+// A student REQUESTS a slot. It stays pending until the mentor confirms it.
+export function requestSession(slotId, sid) {
   const a = state.availability.find(x => x.id === slotId); if (!a) return 'Slot not found.'
   const ms = state.mentorships.find(m => m.active && m.studentId === sid && m.mentorId === a.mentorId)
-  if (!ms) return 'You can only book mentors you have an active mentorship with.'
-  if (a.status !== 'open') return '409 Conflict: this slot has just been booked by someone else.'
+  if (!ms) return 'You can only request sessions with your own mentor.'
+  if (a.status !== 'open') return '409 Conflict: this slot has just been taken by someone else.'
   if (a.start < Date.now()) return 'This slot is in the past.'
-  const s = { id: uid('se'), mentorshipId: ms.id, mentorId: a.mentorId, studentId: sid, slotId: a.id, start: a.start, end: a.end, status: 'scheduled', notes: '', items: [] }
-  state.sessions.push(s); a.status = 'booked'; a.sessionId = s.id
-  notify(a.mentorId, `${userById(sid).name} booked a session for ${fmtDT(a.start)}`, '/mentor/sessions'); return null
+  const s = { id: uid('se'), mentorshipId: ms.id, mentorId: a.mentorId, studentId: sid, slotId: a.id, start: a.start, end: a.end, status: 'requested', notes: '', items: [] }
+  state.sessions.push(s); a.status = 'pending'; a.sessionId = s.id
+  notify(a.mentorId, `${userById(sid).name} requested a session for ${fmtDT(a.start)}`, '/mentor/sessions'); return null
+}
+export function respondSession(id, mentorId, accept) {
+  const s = state.sessions.find(x => x.id === id); if (!s || s.mentorId !== mentorId) return 'Session not found.'
+  if (s.status !== 'requested') return 'This request has already been answered.'
+  const a = state.availability.find(x => x.id === s.slotId)
+  if (accept) { s.status = 'scheduled'; if (a) a.status = 'booked' } else { s.status = 'declined'; if (a) { a.status = 'open'; a.sessionId = null } }
+  notify(s.studentId, accept ? `Your session on ${fmtDT(s.start)} is confirmed` : `Your session request for ${fmtDT(s.start)} was declined`, '/student/sessions'); return null
 }
 const part = (s, u) => s && (s.studentId === u || s.mentorId === u)
 export const sessionsOf = u => state.sessions.filter(s => part(s, u)).sort((a, b) => a.start - b.start)
 export function cancelSession(id, actor) {
   const s = state.sessions.find(x => x.id === id); if (!part(s, actor)) return 'Session not found.'
-  if (s.status !== 'scheduled') return 'Only scheduled sessions can be cancelled.'
+  if (!['requested', 'scheduled'].includes(s.status)) return 'Only upcoming sessions can be cancelled.'
   s.status = 'cancelled'; const a = state.availability.find(x => x.id === s.slotId); if (a) { a.status = 'open'; a.sessionId = null }
   const other = actor === s.studentId ? s.mentorId : s.studentId
   notify(other, `${userById(actor).name} cancelled the session on ${fmtDT(s.start)}`, actor === s.studentId ? '/mentor/sessions' : '/student/sessions'); return null
+}
+// Reschedule moves an upcoming session to another open slot of the same mentor. A student's change needs the mentor to confirm again; a mentor's change is confirmed straight away.
+export function rescheduleSession(id, actor, newSlotId) {
+  const s = state.sessions.find(x => x.id === id); if (!part(s, actor)) return 'Session not found.'
+  if (!['requested', 'scheduled'].includes(s.status)) return 'Only upcoming sessions can be rescheduled.'
+  if (s.start <= Date.now()) return 'This session has already started.'
+  const n = state.availability.find(x => x.id === newSlotId); if (!n || n.mentorId !== s.mentorId) return 'Choose one of this mentor’s open slots.'
+  if (n.status !== 'open') return '409 Conflict: this slot is no longer open.'
+  if (n.start < Date.now()) return 'This slot is in the past.'
+  const old = state.availability.find(x => x.id === s.slotId); if (old) { old.status = 'open'; old.sessionId = null }
+  const byStudent = actor === s.studentId
+  n.status = byStudent ? 'pending' : 'booked'; n.sessionId = s.id
+  const was = s.start; Object.assign(s, { slotId: n.id, start: n.start, end: n.end, status: byStudent ? 'requested' : 'scheduled' })
+  notify(byStudent ? s.mentorId : s.studentId, `${userById(actor).name} moved the session from ${fmtDT(was)} to ${fmtDT(n.start)}${byStudent ? '. Please confirm it.' : ''}`, byStudent ? '/mentor/sessions' : '/student/sessions'); return null
 }
 export function logNotes(id, actor, notes) {
   const s = state.sessions.find(x => x.id === id); if (!part(s, actor)) return 'Session not found.'
@@ -162,19 +198,34 @@ export function logPastSession(msId, actor, date, time, notes) {
 }
 export function addItem(id, actor, text, assignee) {
   const s = state.sessions.find(x => x.id === id); if (!part(s, actor)) return 'Session not found.'
+  if (s.status !== 'completed') return 'Action items can be added once the session is completed.'
   if (text.trim().length < 3) return 'Describe the action item (at least 3 characters).'
   if (!['student', 'mentor'].includes(assignee)) return 'Assign the item to the student or the mentor.'
-  s.items.push({ id: uid('ai'), text: text.trim(), done: false, assignee }); return null
+  s.items.push({ id: uid('ai'), text: text.trim(), done: false, assignee, createdBy: actor }); return null
 }
+export function deleteItem(id, actor, itemId) {
+  const s = state.sessions.find(x => x.id === id); if (!part(s, actor)) return 'Session not found.'
+  const it = s.items.find(i => i.id === itemId); if (!it) return 'Action item not found.'
+  if (!(it.createdBy === actor || it.assignee === userById(actor).role)) return 'Only the person who created or was assigned this item can delete it.'
+  s.items.splice(s.items.indexOf(it), 1); return null
+}
+export const allItems = u => sessionsOf(u).filter(s => s.status === 'completed').flatMap(s => s.items.map(i => ({ ...i, sessionId: s.id, sessionStart: s.start, other: userById(s.studentId === u ? s.mentorId : s.studentId).name })))
 
 /* ---------- feedback ---------- */
-export function giveFeedback({ fromId, mentorshipId, kind, scores, comments, isPublic }) {
+// Completed sessions the user has not given feedback on yet, newest first.
+export const feedbackDue = u => state.sessions.filter(s => s.status === 'completed' && part(s, u) && !state.feedback.some(f => f.sessionId === s.id && f.fromId === u)).sort((a, b) => b.start - a.start)
+export function giveFeedback({ fromId, mentorshipId, kind, sessionId, scores, comments, isPublic }) {
   const ms = state.mentorships.find(m => m.id === mentorshipId); if (!ms || !(ms.studentId === fromId || ms.mentorId === fromId)) return 'Mentorship not found.'
-  if (!['checkin', 'final'].includes(kind)) return 'Choose check-in or final feedback.'
+  if (!['session', 'final'].includes(kind)) return 'Choose session feedback or final feedback.'
+  if (kind === 'session') {
+    const ss = state.sessions.find(x => x.id === sessionId)
+    if (!ss || ss.mentorshipId !== mentorshipId || ss.status !== 'completed') return 'Choose a completed session.'
+    if (state.feedback.some(f => f.sessionId === sessionId && f.fromId === fromId)) return 'You already sent feedback for this session.'
+  }
   if (state.criteria.some(c => !(scores[c] >= 1 && scores[c] <= 5))) return 'Rate every criterion from 1 to 5.'
   if (comments.length > 500) return 'Comments are limited to 500 characters.'
   const toId = fromId === ms.studentId ? ms.mentorId : ms.studentId
-  state.feedback.push({ id: uid('f'), mentorshipId, fromId, toId, kind, scores: { ...scores }, comments: comments.trim(), isPublic: !!isPublic && kind === 'final' && fromId === ms.studentId, createdAt: Date.now() }); return null
+  state.feedback.push({ id: uid('f'), mentorshipId, sessionId: kind === 'session' ? sessionId : null, fromId, toId, kind, scores: { ...scores }, comments: comments.trim(), isPublic: !!isPublic && kind === 'final' && fromId === ms.studentId, createdAt: Date.now() }); return null
 }
 export function editFeedback(id, actor, patch) {
   const f = state.feedback.find(x => x.id === id && x.fromId === actor); if (!f) return 'Feedback not found.'
@@ -192,6 +243,11 @@ export function suggestTag(name) {
   const n = name.trim(); if (n.length < 2) return 'Tag names need at least 2 characters.'
   if (state.tags.some(t => t.name.toLowerCase() === n.toLowerCase())) return 'That tag already exists or is awaiting approval.'
   state.tags.push({ id: uid('t'), name: n, status: 'suggested' }); state.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, `Tag suggested: ${n}`, '/admin/dashboard?tab=content')); return null
+}
+export function addTag(name) {
+  const n = name.trim(); if (n.length < 2) return 'Tag names need at least 2 characters.'
+  if (state.tags.some(t => t.name.toLowerCase() === n.toLowerCase())) return 'That tag already exists.'
+  state.tags.push({ id: uid('t'), name: n, status: 'approved' }); return null
 }
 export function mergeTags(fromId, toId) {
   const a = state.tags.find(t => t.id === fromId), b = state.tags.find(t => t.id === toId); if (!a || !b || a === b) return 'Choose two different tags.'
@@ -231,6 +287,7 @@ export function assignMentor(studentId, mentorId, by) {
   if (!m.verified || !live(m) || !m.title) return 'This mentor is not available.'
   if (m.paused) return 'This mentor has paused new requests.'
   if (activeMentees(mentorId).length >= m.capacity) return '409 Conflict: this mentor has no open place, so the assignment was blocked.'
+  if (state.mentorships.some(x => x.active && x.studentId === studentId)) return 'This student already has a mentor.'
   if (mentorshipOf(studentId, mentorId)) return 'They are already matched.'
   startMentorship(studentId, mentorId, by.role); log(by, `Matched ${s.name} with ${m.name}`)
   notify(studentId, `You have been matched with ${m.name}`, '/student/dashboard'); notify(mentorId, `You have been matched with ${s.name}`, '/mentor/mentees'); return null
@@ -242,11 +299,7 @@ export function contactStudent(coord, studentId, text) {
   state.messages.push({ id: uid('msg'), fromId: coord.id, toId: studentId, text: text.trim(), at: Date.now() })
   notify(studentId, `Message from the programme coordinator: ${text.trim().slice(0, 140)}`, '/notifications'); return null
 }
-export function nudgeMentor(coord, requestId) {
-  const r = state.requests.find(x => x.id === requestId && x.status === 'pending'); if (!r) return 'Request not found.'
-  notify(r.mentorId, `A request has been waiting ${Math.floor((Date.now() - r.createdAt) / DAY)} days. Please reply when you can.`, `/mentor/requests/${r.id}`); return null
-}
-export const stuckRequests = () => state.requests.filter(r => r.status === 'pending' && Date.now() - r.createdAt > 7 * DAY).map(r => ({ id: r.id, ref: 'REQ-' + r.id.slice(-3).toUpperCase(), status: r.status, ageDays: Math.floor((Date.now() - r.createdAt) / DAY) }))
+export const stuckRequests = () => state.requests.filter(r => r.status === 'pending' && Date.now() - r.createdAt > 7 * DAY).map(r => ({ id: r.id, ref: 'REQ-' + r.id.slice(-3).toUpperCase(), status: r.status, ageDays: Math.floor((Date.now() - r.createdAt) / DAY), reminded: r.remindedAt || null }))
 export const unmatchedStudents = () => state.users.filter(u => u.role === 'student' && live(u) && !state.mentorships.some(m => m.active && m.studentId === u.id))
 export function toggleItem(sessionId, actorRole, itemId) {
   const s = state.sessions.find(x => x.id === sessionId), it = s && s.items.find(i => i.id === itemId)
@@ -254,3 +307,24 @@ export function toggleItem(sessionId, actorRole, itemId) {
   if (it.assignee !== actorRole) return `Only the ${it.assignee} can mark this item.`
   it.done = !it.done; return null
 }
+
+/* ---------- account details ---------- */
+export const usernameOk = v => /^[a-z0-9_]{3,20}$/.test(v)
+export const usernameTaken = (v, exceptId) => state.users.some(u => u.id !== exceptId && (u.username || '').toLowerCase() === v.toLowerCase())
+export function setUsername(id, v) {
+  const n = v.trim().toLowerCase()
+  if (!usernameOk(n)) return 'Username must be 3 to 20 characters: lowercase letters, numbers or underscores.'
+  if (usernameTaken(n, id)) return 'That username is already taken.'
+  userById(id).username = n; return null
+}
+export function changePassword(id, current, next) {
+  const u = userById(id)
+  if (u.password !== current) return 'Your current password is incorrect.'
+  if (!(next.length >= 8 && /[A-Za-z]/.test(next) && /\d/.test(next))) return 'The new password needs at least 8 characters, with letters and numbers.'
+  if (next === current) return 'Choose a password that is different from the current one.'
+  u.password = next; return null
+}
+export const setPhoto = (id, dataUrl) => { userById(id).photo = dataUrl || '' }
+export function addTodo(id, text) { const u = userById(id); if (text.trim().length < 2) return 'Write a short task.'; (u.todos || (u.todos = [])).push({ id: uid('t'), text: text.trim(), done: false }); return null }
+export const toggleTodo = (id, tid) => { const t = (userById(id).todos || []).find(x => x.id === tid); if (t) t.done = !t.done }
+export const removeTodo = (id, tid) => { const u = userById(id); u.todos = (u.todos || []).filter(x => x.id !== tid) }

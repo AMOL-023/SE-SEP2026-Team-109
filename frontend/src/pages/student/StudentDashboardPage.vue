@@ -23,7 +23,7 @@
         <p v-if="!mentorships.length && !pending.length" class="muted">No active mentor or open request yet.</p>
         <div class="row"><router-link class="btn ghost sm" to="/student/requests">All requests</router-link><router-link class="btn ghost sm" to="/student/mentors">Find mentors</router-link></div></section>
       <section class="card" aria-labelledby="us"><div class="row between"><h2 id="us">Upcoming sessions</h2><router-link to="/student/sessions">Sessions</router-link></div>
-        <p v-if="!upcoming2.length" class="muted">{{ mentorships.length ? 'No sessions booked. Book one from your mentor’s open slots.' : 'Sessions open up once you have a mentor.' }}</p>
+        <p v-if="!upcoming2.length" class="muted">{{ mentorships.length ? 'No sessions scheduled. Request one from your mentor’s open slots.' : 'Sessions open up once you have a mentor.' }}</p>
         <ul class="plain"><li v-for="s in upcoming2" :key="s.id"><b>{{ userById(s.mentorId).name }}</b><br /><span class="muted">{{ fmtDT(s.start) }}</span></li></ul></section>
       <section class="card" aria-labelledby="ra"><div class="row between"><h2 id="ra">Recent activity</h2><router-link to="/notifications">All</router-link></div>
         <p v-if="!feed.length" class="muted">Updates about your requests will appear here.</p>

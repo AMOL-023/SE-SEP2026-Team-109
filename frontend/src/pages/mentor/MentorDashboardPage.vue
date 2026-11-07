@@ -27,9 +27,9 @@
       <section class="card" aria-labelledby="vs"><h2 id="vs">Verification</h2><span class="badge" :class="u.verified ? 'accepted' : 'pending'">{{ u.verified ? 'Verified' : 'Awaiting verification' }}</span>
         <p class="muted">{{ u.verified ? 'Students can find and request you.' : 'Students cannot see your profile until an admin verifies it.' }}</p></section>
       <section class="card" aria-labelledby="us"><div class="row between"><h2 id="us">Upcoming sessions</h2><router-link to="/mentor/sessions">All</router-link></div>
-        <p v-if="!upcoming.length" class="muted">No sessions booked.</p><ul class="plain"><li v-for="s in upcoming" :key="s.id"><b>{{ userById(s.studentId).name }}</b><br /><span class="muted">{{ fmtDT(s.start) }}</span></li></ul></section>
+        <p v-if="!upcoming.length" class="muted">No sessions scheduled.</p><ul class="plain"><li v-for="s in upcoming" :key="s.id"><b>{{ userById(s.studentId).name }}</b><br /><span class="muted">{{ fmtDT(s.start) }}</span></li></ul></section>
       <section class="card" aria-labelledby="av"><div class="row between"><h2 id="av">Availability</h2><router-link to="/mentor/availability">Manage</router-link></div>
-        <p class="muted">{{ openSlotsN }} open slot(s) · {{ bookedN }} booked in the future.</p></section>
+        <p class="muted">{{ openSlotsN }} open slot(s) · {{ bookedN }} scheduled in the future.</p></section>
       <section v-if="!u.title" class="card note"><b>Complete your profile</b><p class="muted">Students cannot find you until it is filled in.</p><router-link class="btn sm" to="/mentor/profile">Complete profile</router-link></section>
     </div>
   </div>
