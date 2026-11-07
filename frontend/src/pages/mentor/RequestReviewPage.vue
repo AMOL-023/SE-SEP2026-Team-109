@@ -9,7 +9,7 @@
       <section class="card"><h2>Message</h2><p>{{ r.message }}</p><p class="muted">Sent {{ fmt(r.createdAt) }}</p>
         <p class="muted">Your capacity: {{ activeMentees(u.id).length }} of {{ u.capacity }} used.</p>
         <p v-if="r.reason" class="note">Reason given: {{ r.reason }}</p>
-        <template v-if="attached.length"><h3 class="sub">Attached goals</h3><ul class="plain"><li v-for="g in attached" :key="g.id">{{ g.title }} <span class="muted">· due {{ g.target }}</span></li></ul></template></section>
+        <template v-if="attached.length"><h3 class="sub">Goals the student has opened to mentors</h3><ul class="plain"><li v-for="g in attached" :key="g.id">{{ g.title }} <span class="muted">· due {{ g.target }}</span></li></ul></template></section>
     </div>
     <section v-if="r.status === 'pending'" class="card"><h2>Your decision</h2>
       <label for="rs">Reason if rejecting (optional, up to 500 characters)</label><textarea id="rs" v-model="reason" rows="3"></textarea>
@@ -32,6 +32,6 @@ import RequestTimeline from '../../components/RequestTimeline.vue'
 const route = useRoute(), u = computed(me), reason = ref(''), err = ref(''), ask = ref(null)
 const r = computed(() => state.requests.find(x => x.id === route.params.requestId && x.mentorId === u.value.id))
 const s = computed(() => userById(r.value.studentId))
-const attached = computed(() => state.goals.filter(g => (r.value.goalIds || []).includes(g.id)))
+const attached = computed(() => state.goals.filter(g => g.studentId === r.value.studentId && g.visibility === 'all'))
 function decideIt() { const to = ask.value; ask.value = null; err.value = decide(r.value.id, u.value.id, to, to === 'rejected' ? reason.value.trim() : '') || ''; if (!err.value) toast(`Request ${to}`) }
 </script>

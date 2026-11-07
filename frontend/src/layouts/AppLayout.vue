@@ -3,7 +3,7 @@
     <header class="shell-top">
       <router-link class="shell-brand" :to="'/' + user.role + '/dashboard'"><Icon name="compass" :size="26" />MentorConnect</router-link>
       <div class="row">
-        <span class="chip"><Avatar :name="user.name" :size="24" />{{ user.name }} · {{ roleLabel }}</span>
+        <span class="chip"><Avatar :name="user.name" :photo="user.photo" :size="24" />{{ user.name }} · {{ roleLabel }}</span>
         <router-link to="/notifications" class="chip" :aria-label="'Notifications' + (unread ? ', ' + unread + ' unread' : '')"><Icon name="bell" :size="16" />{{ unread ? unread + ' new' : 'Alerts' }}</router-link>
       </div>
     </header>
@@ -13,7 +13,7 @@
         <button class="barbtn" type="button" :aria-expanded="!compact" aria-controls="side" @click="toggleSide"><Icon name="dashboard" :size="14" /> {{ compact ? 'Show panel' : 'Hide panel' }}</button></div>
       <div class="frame-body">
         <aside v-show="!compact" id="side" class="frame-side" aria-label="Context and shortcuts">
-          <div class="side-id"><Avatar :name="user.name" :size="34" /><div><b>{{ user.name.split(' ')[0] }}</b><span class="muted">{{ roleLabel }}</span></div></div>
+          <div class="side-id"><Avatar :name="user.name" :photo="user.photo" :size="34" /><div><b>{{ user.name.split(' ')[0] }}</b><span class="muted">{{ roleLabel }}</span></div></div>
           <h3 class="side-h">Shortcuts</h3>
           <ul class="qa"><li v-for="q in quick" :key="q[0]"><router-link :to="q[0]"><Icon :name="q[2]" :size="16" /><span>{{ q[1] }}</span><span v-if="q[3]" class="qc">{{ q[3] }}</span></router-link></li></ul>
           <h3 class="side-h">Status</h3>
@@ -44,8 +44,8 @@ const router = useRouter(), route = useRoute(), user = computed(me)
 const NAV = {
   student: [['/student/dashboard', 'Home', 'dashboard'], ['/student/mentors', 'Mentors', 'search'], ['/student/requests', 'Requests', 'send'], ['/student/goals', 'Goals', 'target'], ['/student/sessions', 'Sessions', 'calendar'], ['/student/feedback', 'Feedback', 'star'], ['/student/profile', 'Profile', 'user'], ['/account', 'Account', 'settings']],
   mentor: [['/mentor/dashboard', 'Home', 'dashboard'], ['/mentor/requests', 'Requests', 'inbox'], ['/mentor/mentees', 'Mentees', 'users'], ['/mentor/sessions', 'Sessions', 'calendar'], ['/mentor/availability', 'Availability', 'clock'], ['/mentor/feedback', 'Feedback', 'star'], ['/mentor/profile', 'Profile', 'user'], ['/account', 'Account', 'settings']],
-  coordinator: [['/coordinator/dashboard', 'Insights', 'chart'], ['/coordinator/matching', 'Matching', 'users'], ['/coordinator/goals', 'Goals', 'target'], ['/account', 'Account', 'settings']],
-  admin: [['/admin/dashboard', 'Overview', 'chart'], ['/admin/dashboard?tab=users', 'Users', 'users'], ['/admin/dashboard?tab=matching', 'Matching', 'heart'], ['/admin/dashboard?tab=content', 'Content', 'clipboard'], ['/admin/dashboard?tab=reports', 'Reports', 'shield'], ['/account', 'Account', 'settings']]
+  coordinator: [['/coordinator/dashboard', 'Insights', 'chart'], ['/coordinator/matching', 'Matching', 'users'], ['/coordinator/goals', 'Goals', 'target'], ['/coordinator/profile', 'Profile', 'user'], ['/account', 'Account', 'settings']],
+  admin: [['/admin/dashboard', 'Overview', 'chart'], ['/admin/dashboard?tab=users', 'Users', 'users'], ['/admin/dashboard?tab=content', 'Content', 'clipboard'], ['/admin/dashboard?tab=reports', 'Reports', 'shield']]
 }
 const roleLabel = computed(() => ({ student: 'Student', mentor: 'Mentor', coordinator: 'Coordinator', admin: 'Administrator' }[user.value?.role]))
 const nav = computed(() => (user.value ? NAV[user.value.role] : []))
@@ -57,7 +57,7 @@ const compact = ref((() => { try { const v = localStorage.getItem('mc_side'); re
 const toggleSide = () => { compact.value = !compact.value; try { localStorage.setItem('mc_side', compact.value ? '1' : '0') } catch (e) { /* storage unavailable */ } }
 const quick = computed(() => {
   const r = user.value.role, id = user.value.id
-  if (r === 'student') return [['/student/mentors', 'Find a mentor', 'search'], ['/student/requests', 'My requests', 'send', pend.value], ['/student/goals', 'Update goals', 'target'], ['/student/sessions', 'Book a session', 'calendar']]
+  if (r === 'student') return [['/student/mentors', 'Find a mentor', 'search'], ['/student/requests', 'My requests', 'send', pend.value], ['/student/goals', 'Update goals', 'target'], ['/student/sessions', 'Request a session', 'calendar']]
   if (r === 'mentor') return [['/mentor/requests', 'Review requests', 'inbox', state.requests.filter(x => x.mentorId === id && x.status === 'pending').length], ['/mentor/availability', 'Add availability', 'clock'], ['/mentor/sessions', 'Log a session', 'calendar'], ['/mentor/profile', 'Edit profile', 'user']]
   if (r === 'coordinator') return [['/coordinator/matching', 'Match students', 'users', unmatchedStudents().length], ['/coordinator/dashboard', 'Stuck requests', 'clock', stuckRequests().length], ['/coordinator/goals', 'Open goals', 'target']]
   return [['/admin/dashboard?tab=users', 'Verify mentors', 'users', state.users.filter(x => x.role === 'mentor' && x.title && !x.verified).length], ['/admin/dashboard?tab=reports', 'Review reports', 'shield', state.reports.filter(x => x.status !== 'resolved').length], ['/admin/dashboard?tab=content', 'Manage tags', 'clipboard', state.tags.filter(x => x.status === 'suggested').length]]

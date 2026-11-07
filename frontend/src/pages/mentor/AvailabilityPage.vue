@@ -1,15 +1,15 @@
 <template>
-  <PageHeader title="Availability" desc="Offer time slots for your mentees. Past slots cannot be offered, slots cannot overlap, and booked slots are locked." />
+  <PageHeader title="Availability" desc="Offer time slots for your mentees. Past slots cannot be offered, slots cannot overlap, and slots with a request or booking are locked." />
   <section class="card" aria-labelledby="ad"><h2 id="ad">Add a slot</h2>
     <div class="two-col"><div><label for="st">Start</label><input id="st" type="datetime-local" :min="minNow" v-model="n.start" /></div><div><label for="en">End</label><input id="en" type="datetime-local" :min="n.start || minNow" v-model="n.end" /></div></div>
     <p v-if="err" class="error" role="alert">{{ err }}</p><button class="btn" @click="add">Add slot</button></section>
   <section class="card" aria-labelledby="sl"><h2 id="sl">Upcoming slots <span class="count">{{ slots.length }}</span></h2>
-    <p v-if="!slots.length" class="muted">No slots yet. Add one above so mentees can book you.</p>
+    <p v-if="!slots.length" class="muted">No slots yet. Add one above so mentees can request them.</p>
     <article v-for="a in slots" :key="a.id" class="sess row between"><span><b>{{ fmtDT(a.start) }}</b> to {{ new Date(a.end).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) }}</span>
-      <span class="row"><span class="badge" :class="a.status === 'booked' ? 'pending' : 'accepted'">{{ a.status === 'booked' ? 'Booked by ' + booker(a) : 'Open' }}</span>
+      <span class="row"><span class="badge" :class="a.status === 'open' ? 'accepted' : 'pending'">{{ a.status === 'booked' ? 'Booked by ' + booker(a) : a.status === 'pending' ? 'Requested by ' + booker(a) : 'Open' }}</span>
         <template v-if="a.status === 'open'"><button class="btn ghost sm" @click="edit(a)">Edit</button><button class="btn ghost sm" @click="ask = a">Remove</button></template>
-        <router-link v-else class="btn ghost sm" to="/mentor/sessions">Manage session</router-link></span>
-      <span v-if="a.status === 'booked'" class="hint" style="flex-basis:100%">Locked: cancel the session first to change this slot. The student is notified.</span></article></section>
+        <router-link v-else class="btn ghost sm" to="/mentor/sessions">{{ a.status === 'pending' ? 'Reply to request' : 'Manage or reschedule' }}</router-link></span>
+      <span v-if="a.status !== 'open'" class="hint" style="flex-basis:100%">Locked: reschedule or cancel the session first to change this slot. The student is notified.</span></article></section>
   <ConfirmModal v-if="ed" title="Edit slot" ok="Save" @ok="save" @cancel="ed = null"><label for="es">Start</label><input id="es" type="datetime-local" :min="minNow" v-model="d.start" /><label for="ee">End</label><input id="ee" type="datetime-local" v-model="d.end" /><p v-if="eerr" class="error" role="alert">{{ eerr }}</p></ConfirmModal>
   <ConfirmModal v-if="ask" title="Remove this slot?" ok="Remove" danger @ok="remove" @cancel="ask = null"><p>{{ fmtDT(ask.start) }}</p></ConfirmModal>
 </template>

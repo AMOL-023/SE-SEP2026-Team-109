@@ -151,3 +151,5 @@ input:disabled,select:disabled{background:#ebe8d3;color:#3f3b31;-webkit-text-fil
 .results{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
 .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:4px 32px}
 @media(max-width:1100px){.ws,.ws.adm{grid-template-columns:minmax(0,1fr)}.dir{grid-template-columns:minmax(0,1fr)}}
+.facet-h{font:600 .72rem ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 0;color:#55514a}
+.chips .area{background:#dcefe2;border-color:#15573f;color:#0f3f2b;font-weight:600}

@@ -28,7 +28,8 @@ const routes = [
     { path: 'coordinator/dashboard', component: () => import('../pages/coordinator/CoordinatorDashboardPage.vue'), meta: { roles: C } },
     { path: 'coordinator/matching', component: () => import('../pages/coordinator/CoordinatorMatchingPage.vue'), meta: { roles: C } },
     { path: 'coordinator/goals', component: () => import('../pages/coordinator/CoordinatorGoalsPage.vue'), meta: { roles: C } },
-    { path: 'account', component: () => import('../pages/shared/AccountPage.vue'), meta: { roles: ALL } },
+    { path: 'account', component: () => import('../pages/shared/AccountPage.vue'), meta: { roles: ['student', 'mentor', 'coordinator'] } },
+    { path: 'coordinator/profile', component: () => import('../pages/coordinator/CoordinatorProfilePage.vue'), meta: { roles: C } },
     { path: 'notifications', component: () => import('../pages/shared/NotificationsPage.vue'), meta: { roles: ALL } },
     { path: 'admin/dashboard', component: () => import('../pages/admin/AdminDashboardPage.vue'), meta: { roles: A } }
   ] },
